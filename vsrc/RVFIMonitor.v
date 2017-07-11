@@ -3,25 +3,25 @@
 module RVFIMonitor (
   input clock,
   input reset,
-  input [0:0] rvfi_valid,
-  input [7:0] rvfi_order,
-  input [31:0] rvfi_insn,
-  input [0:0] rvfi_trap,
-  input [0:0] rvfi_halt,
-  input [0:0] rvfi_intr,
-  input [4:0] rvfi_rs1_addr,
-  input [4:0] rvfi_rs2_addr,
-  input [31:0] rvfi_rs1_rdata,
-  input [31:0] rvfi_rs2_rdata,
-  input [4:0] rvfi_rd_addr,
-  input [31:0] rvfi_rd_wdata,
-  input [31:0] rvfi_pc_rdata,
-  input [31:0] rvfi_pc_wdata,
-  input [31:0] rvfi_mem_addr,
-  input [3:0] rvfi_mem_rmask,
-  input [3:0] rvfi_mem_wmask,
-  input [31:0] rvfi_mem_rdata,
-  input [31:0] rvfi_mem_wdata,
+  input [1:0] rvfi_valid,
+  input [15:0] rvfi_order,
+  input [63:0] rvfi_insn,
+  input [1:0] rvfi_trap,
+  input [1:0] rvfi_halt,
+  input [1:0] rvfi_intr,
+  input [9:0] rvfi_rs1_addr,
+  input [9:0] rvfi_rs2_addr,
+  input [63:0] rvfi_rs1_rdata,
+  input [63:0] rvfi_rs2_rdata,
+  input [9:0] rvfi_rd_addr,
+  input [63:0] rvfi_rd_wdata,
+  input [63:0] rvfi_pc_rdata,
+  input [63:0] rvfi_pc_wdata,
+  input [63:0] rvfi_mem_addr,
+  input [7:0] rvfi_mem_rmask,
+  input [7:0] rvfi_mem_wmask,
+  input [63:0] rvfi_mem_rdata,
+  input [63:0] rvfi_mem_wdata,
   output reg [15:0] errcode
 );
   wire ch0_rvfi_valid = rvfi_valid[0];
@@ -144,10 +144,131 @@ module RVFIMonitor (
     end
   end
 
+  wire ch1_rvfi_valid = rvfi_valid[1];
+  wire [7:0] ch1_rvfi_order = rvfi_order[15:8];
+  wire [31:0] ch1_rvfi_insn = rvfi_insn[63:32];
+  wire ch1_rvfi_trap = rvfi_trap[1];
+  wire ch1_rvfi_halt = rvfi_halt[1];
+  wire ch1_rvfi_intr = rvfi_intr[1];
+  wire [4:0] ch1_rvfi_rs1_addr = rvfi_rs1_addr[9:5];
+  wire [4:0] ch1_rvfi_rs2_addr = rvfi_rs2_addr[9:5];
+  wire [31:0] ch1_rvfi_rs1_rdata = rvfi_rs1_rdata[63:32];
+  wire [31:0] ch1_rvfi_rs2_rdata = rvfi_rs2_rdata[63:32];
+  wire [4:0] ch1_rvfi_rd_addr = rvfi_rd_addr[9:5];
+  wire [31:0] ch1_rvfi_rd_wdata = rvfi_rd_wdata[63:32];
+  wire [31:0] ch1_rvfi_pc_rdata = rvfi_pc_rdata[63:32];
+  wire [31:0] ch1_rvfi_pc_wdata = rvfi_pc_wdata[63:32];
+  wire [31:0] ch1_rvfi_mem_addr = rvfi_mem_addr[63:32];
+  wire [3:0] ch1_rvfi_mem_rmask = rvfi_mem_rmask[7:4];
+  wire [3:0] ch1_rvfi_mem_wmask = rvfi_mem_wmask[7:4];
+  wire [31:0] ch1_rvfi_mem_rdata = rvfi_mem_rdata[63:32];
+  wire [31:0] ch1_rvfi_mem_wdata = rvfi_mem_wdata[63:32];
+
+  wire ch1_spec_valid;
+  wire ch1_spec_trap;
+  wire [4:0] ch1_spec_rs1_addr;
+  wire [4:0] ch1_spec_rs2_addr;
+  wire [4:0] ch1_spec_rd_addr;
+  wire [31:0] ch1_spec_rd_wdata;
+  wire [31:0] ch1_spec_pc_wdata;
+  wire [31:0] ch1_spec_mem_addr;
+  wire [3:0] ch1_spec_mem_rmask;
+  wire [3:0] ch1_spec_mem_wmask;
+  wire [31:0] ch1_spec_mem_wdata;
+
+  RVFIMonitor_isa_spec ch1_isa_spec (
+    .rvfi_valid(ch1_rvfi_valid),
+    .rvfi_insn(ch1_rvfi_insn),
+    .rvfi_pc_rdata(ch1_rvfi_pc_rdata),
+    .rvfi_rs1_rdata(ch1_rvfi_rs1_rdata),
+    .rvfi_rs2_rdata(ch1_rvfi_rs2_rdata),
+    .rvfi_mem_rdata(ch1_rvfi_mem_rdata),
+    .spec_valid(ch1_spec_valid),
+    .spec_trap(ch1_spec_trap),
+    .spec_rs1_addr(ch1_spec_rs1_addr),
+    .spec_rs2_addr(ch1_spec_rs2_addr),
+    .spec_rd_addr(ch1_spec_rd_addr),
+    .spec_rd_wdata(ch1_spec_rd_wdata),
+    .spec_pc_wdata(ch1_spec_pc_wdata),
+    .spec_mem_addr(ch1_spec_mem_addr),
+    .spec_mem_rmask(ch1_spec_mem_rmask),
+    .spec_mem_wmask(ch1_spec_mem_wmask),
+    .spec_mem_wdata(ch1_spec_mem_wdata)
+  );
+
+  reg [15:0] ch1_errcode;
+
+  task ch1_handle_error;
+    input [15:0] code;
+    input [511:0] msg;
+    begin
+      $display("-------- RVFI Monitor error %0d in channel 1: %m at time %0t --------", code, $time);
+      $display("Error message: %0s", msg);
+      $display("rvfi_valid = %x", ch1_rvfi_valid);
+      $display("rvfi_order = %x", ch1_rvfi_order);
+      $display("rvfi_insn = %x", ch1_rvfi_insn);
+      $display("rvfi_trap = %x", ch1_rvfi_trap);
+      $display("rvfi_halt = %x", ch1_rvfi_halt);
+      $display("rvfi_intr = %x", ch1_rvfi_intr);
+      $display("rvfi_rs1_addr = %x", ch1_rvfi_rs1_addr);
+      $display("rvfi_rs2_addr = %x", ch1_rvfi_rs2_addr);
+      $display("rvfi_rs1_rdata = %x", ch1_rvfi_rs1_rdata);
+      $display("rvfi_rs2_rdata = %x", ch1_rvfi_rs2_rdata);
+      $display("rvfi_rd_addr = %x", ch1_rvfi_rd_addr);
+      $display("rvfi_rd_wdata = %x", ch1_rvfi_rd_wdata);
+      $display("rvfi_pc_rdata = %x", ch1_rvfi_pc_rdata);
+      $display("rvfi_pc_wdata = %x", ch1_rvfi_pc_wdata);
+      $display("rvfi_mem_addr = %x", ch1_rvfi_mem_addr);
+      $display("rvfi_mem_rmask = %x", ch1_rvfi_mem_rmask);
+      $display("rvfi_mem_wmask = %x", ch1_rvfi_mem_wmask);
+      $display("rvfi_mem_rdata = %x", ch1_rvfi_mem_rdata);
+      $display("rvfi_mem_wdata = %x", ch1_rvfi_mem_wdata);
+      $display("spec_valid = %x", ch1_spec_valid);
+      $display("spec_trap = %x", ch1_spec_trap);
+      $display("spec_rs1_addr = %x", ch1_spec_rs1_addr);
+      $display("spec_rs2_addr = %x", ch1_spec_rs2_addr);
+      $display("spec_rd_addr = %x", ch1_spec_rd_addr);
+      $display("spec_rd_wdata = %x", ch1_spec_rd_wdata);
+      $display("spec_pc_wdata = %x", ch1_spec_pc_wdata);
+      $display("spec_mem_addr = %x", ch1_spec_mem_addr);
+      $display("spec_mem_rmask = %x", ch1_spec_mem_rmask);
+      $display("spec_mem_wmask = %x", ch1_spec_mem_wmask);
+      $display("spec_mem_wdata = %x", ch1_spec_mem_wdata);
+      ch1_errcode <= code;
+    end
+  endtask
+
+  always @(posedge clock) begin
+    ch1_errcode <= 0;
+    if (!reset && ch1_rvfi_valid) begin
+      if (ch1_spec_valid) begin
+        if (ch1_rvfi_trap != ch1_spec_trap) begin
+          ch1_handle_error(201, "mismatch in trap");
+        end
+        if (ch1_rvfi_rs1_addr != ch1_spec_rs1_addr && ch1_spec_rs1_addr != 0) begin
+          ch1_handle_error(202, "mismatch in rs1_addr");
+        end
+        if (ch1_rvfi_rs2_addr != ch1_spec_rs2_addr && ch1_spec_rs2_addr != 0) begin
+          ch1_handle_error(203, "mismatch in rs2_addr");
+        end
+        if (ch1_rvfi_rd_addr != ch1_spec_rd_addr) begin
+          ch1_handle_error(204, "mismatch in rd_addr");
+        end
+        if (ch1_rvfi_rd_wdata != ch1_spec_rd_wdata && !ch1_spec_mem_rmask) begin
+          ch1_handle_error(205, "mismatch in rd_wdata");
+        end
+        if (ch1_rvfi_pc_wdata != ch1_spec_pc_wdata) begin
+          ch1_handle_error(206, "mismatch in pc_wdata");
+        end
+      end
+    end
+  end
+
   always @(posedge clock) begin
     errcode <= 0;
     if (!reset) begin
       if (ch0_errcode) errcode <= ch0_errcode;
+      if (ch1_errcode) errcode <= ch1_errcode;
     end
   end
 endmodule

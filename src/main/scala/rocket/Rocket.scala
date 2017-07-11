@@ -760,9 +760,41 @@ object ImmGen {
   }
 }
 
+object RVFIMonitor {
+  class RVFI_Base(xlen: Integer) extends Bundle {
+    val valid = UInt(width=1)
+    val order = UInt(width=8)
+    val insn = UInt(width=32)
+    val intr = UInt(width=1)
+    val trap = UInt(width=1)
+    val halt = UInt(width=1)
+    val rs1_addr = UInt(width=5)
+    val rs2_addr = UInt(width=5)
+    val rs1_rdata = UInt(width=xlen)
+    val rs2_rdata = UInt(width=xlen)
+    val rd_addr = UInt(width=5)
+    val rd_wdata = UInt(width=xlen)
+    val pc_rdata = UInt(width=xlen)
+    val pc_wdata = UInt(width=xlen)
+    val mem_addr = UInt(width=xlen)
+    val mem_rmask = UInt(width=xlen/8)
+    val mem_wmask = UInt(width=xlen/8)
+    val mem_rdata = UInt(width=xlen)
+    val mem_wdata = UInt(width=xlen)
+    override def cloneType: this.type = new RVFI_Base(xlen).asInstanceOf[this.type]
+  }
+
+  def invalid_RVFI_base(xlen: Integer): RVFI_Base = {
+    val ret_interface = Wire(new RVFI_Base(xlen))
+    ret_interface.valid := Bool(false)
+    ret_interface
+  }
+}
+
 class RVFIMonitor(implicit p: Parameters) extends BlackBox {
   val xlen = p(XLen)
-  val nret = 1
+  val nret = 2
+
   val io = IO(new Bundle {
     val clock = Clock(INPUT)
     val reset = Bool(INPUT)
@@ -787,6 +819,28 @@ class RVFIMonitor(implicit p: Parameters) extends BlackBox {
     val rvfi_mem_wdata = UInt(INPUT, width=nret*xlen)
     val errcode = UInt(OUTPUT, width=16)
   })
+
+  def connect(content: Vec[RVFIMonitor.RVFI_Base]): Unit = {
+    io.rvfi_valid := content.map(_.valid).asUInt
+    io.rvfi_order := content.map(_.order).asUInt
+    io.rvfi_insn := content.map(_.insn).asUInt
+    io.rvfi_intr := content.map(_.intr).asUInt
+    io.rvfi_trap := content.map(_.trap).asUInt
+    io.rvfi_halt := content.map(_.halt).asUInt
+    io.rvfi_rs1_addr := content.map(_.rs1_addr).asUInt
+    io.rvfi_rs2_addr := content.map(_.rs2_addr).asUInt
+    io.rvfi_rs1_rdata := content.map(_.rs1_rdata).asUInt
+    io.rvfi_rs2_rdata := content.map(_.rs2_rdata).asUInt
+    io.rvfi_rd_addr := content.map(_.rd_addr).asUInt
+    io.rvfi_rd_wdata := content.map(_.rd_wdata).asUInt
+    io.rvfi_pc_rdata := content.map(_.pc_rdata).asUInt
+    io.rvfi_pc_wdata := content.map(_.pc_wdata).asUInt
+    io.rvfi_mem_addr := content.map(_.mem_addr).asUInt
+    io.rvfi_mem_rmask := content.map(_.mem_rmask).asUInt
+    io.rvfi_mem_wmask := content.map(_.mem_wmask).asUInt
+    io.rvfi_mem_rdata := content.map(_.mem_rdata).asUInt
+    io.rvfi_mem_wdata := content.map(_.mem_wdata).asUInt
+  }
 }
 
 class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
@@ -794,17 +848,9 @@ class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
 
   rvfi_mon.io.clock := clock
   rvfi_mon.io.reset := reset
-  rvfi_mon.io.rvfi_order := UInt(0)
-  rvfi_mon.io.rvfi_insn := wb_reg_inst
-  rvfi_mon.io.rvfi_intr := Reg(next=Reg(next=Reg(next=(csr.io.interrupt))))
-  rvfi_mon.io.rvfi_trap := Reg(next=Reg(next=Reg(next=(id_illegal_insn))))
-  rvfi_mon.io.rvfi_halt := UInt(0)
-  rvfi_mon.io.rvfi_pc_wdata := Reg(next=io.imem.req.bits.pc)
-  rvfi_mon.io.rvfi_mem_addr := Reg(next=Reg(next=io.dmem.req.bits.addr))
-  rvfi_mon.io.rvfi_mem_rmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=MemoryOpConstants.isRead(io.dmem.req.bits.cmd)))) & Reg(next=io.dmem.s1_data.mask)
-  rvfi_mon.io.rvfi_mem_wmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=MemoryOpConstants.isWrite(io.dmem.req.bits.cmd))))  // TODO Partial store bits (M_PWR)
-  rvfi_mon.io.rvfi_mem_rdata := Reg(next=io.dmem.s1_data.data)
-  rvfi_mon.io.rvfi_mem_wdata := Reg(next=Reg(next=io.dmem.req.bits.data))
+
+  val rd_store_commit = Vec.fill(32){Reg(init=RVFIMonitor.invalid_RVFI_base(p(XLen)))}
+  val inst_commit = Wire(new RVFIMonitor.RVFI_Base(p(XLen)))
 
 //  val pc = Wire(SInt(width=xLen))
   val pc = Wire(Bits())
@@ -816,45 +862,57 @@ class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
   val has_data = wb_wen && !wb_set_sboard
   val priv = csr.io.status.prv
 
-//  rvfi_mon.io.rvfi_valid := wb_valid
-  rvfi_mon.io.rvfi_pc_rdata := wb_reg_pc
-//  rvfi_mon.io.rvfi_rd_addr := Mux(rf_wen, rf_waddr, UInt(0))
-//  rvfi_mon.io.rvfi_rd_wdata := Mux(rf_wen && rf_waddr=/=UInt(0), rf_wdata, UInt(0))
-  rvfi_mon.io.rvfi_rs1_addr := wb_reg_inst(19,15)
-  rvfi_mon.io.rvfi_rs2_addr := wb_reg_inst(24,20)
-  rvfi_mon.io.rvfi_rs1_rdata := Reg(next=Reg(next=ex_rs(0)))
-  rvfi_mon.io.rvfi_rs2_rdata := Reg(next=Reg(next=ex_rs(1)))
+  inst_commit.pc_rdata := wb_reg_pc
+  inst_commit.pc_wdata := Reg(next=io.imem.req.bits.pc)
+  inst_commit.insn := wb_reg_inst
+  inst_commit.order := UInt(0)
+  inst_commit.intr := Reg(next=Reg(next=Reg(next=(csr.io.interrupt))))
+  inst_commit.trap := Reg(next=Reg(next=Reg(next=(id_illegal_insn))))
+  inst_commit.halt := UInt(0)
+  inst_commit.rs1_addr := wb_reg_inst(19,15)
+  inst_commit.rs2_addr := wb_reg_inst(24,20)
+  inst_commit.rs1_rdata := Reg(next=Reg(next=ex_rs(0)))
+  inst_commit.rs2_rdata := Reg(next=Reg(next=ex_rs(1)))
+  inst_commit.mem_addr := Reg(next=Reg(next=io.dmem.req.bits.addr))
+  inst_commit.mem_rdata := Reg(next=io.dmem.s1_data.data)
+  inst_commit.mem_rmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=MemoryOpConstants.isRead(io.dmem.req.bits.cmd)))) & Reg(next=io.dmem.s1_data.mask)
+  inst_commit.mem_wdata := Reg(next=Reg(next=io.dmem.req.bits.data))
+  inst_commit.mem_wmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=MemoryOpConstants.isWrite(io.dmem.req.bits.cmd))))  // TODO Partial store bits (M_PWR)
 
-  rvfi_mon.io.rvfi_valid := Bool(false)
+  inst_commit.valid := Bool(false)
   when (wb_valid) {
-    rvfi_mon.io.rvfi_valid := Bool(true)
+    inst_commit.valid := Bool(true)
     when (wfd) {
-      //printf ("%d 0x%x (0x%x) f%d p%d 0xXXXXXXXXXXXXXXXX\n", priv, pc, inst, rd, rd+UInt(32))
-      rvfi_mon.io.rvfi_rd_addr := rd
-      rvfi_mon.io.rvfi_rd_wdata := rd+UInt(32)
+      inst_commit.rd_addr := rd
+      inst_commit.rd_wdata := rd+UInt(32)
     }
     .elsewhen (wxd && rd =/= UInt(0) && has_data) {
-//      printf ("%d 0x%x (0x%x) x%d 0x%x\n", priv, pc, inst, rd, rf_wdata)
-      rvfi_mon.io.rvfi_rd_addr := rd
-      rvfi_mon.io.rvfi_rd_wdata := rf_wdata
+      inst_commit.rd_addr := rd
+      inst_commit.rd_wdata := rf_wdata
     }
     .elsewhen (wxd && rd =/= UInt(0) && !has_data) {
-//      printf ("%d 0x%x (0x%x) x%d p%d 0xXXXXXXXXXXXXXXXX\n", priv, pc, inst, rd, rd)
-      rvfi_mon.io.rvfi_rd_addr := rd
-      rvfi_mon.io.rvfi_rd_wdata := UInt(0)
+      inst_commit.rd_addr := rd
+      inst_commit.rd_wdata := UInt(0)
     }
     .otherwise {
-//      printf ("%d 0x%x (0x%x)\n", priv, pc, inst)
-      rvfi_mon.io.rvfi_rd_addr := UInt(0)
-      rvfi_mon.io.rvfi_rd_wdata := UInt(0)
+      inst_commit.rd_addr := UInt(0)
+      inst_commit.rd_wdata := UInt(0)
     }
   }
 
-  when (ll_wen && rf_waddr =/= UInt(0)) {
-//    printf ("x%d p%d 0x%x\n", rf_waddr, rf_waddr, rf_wdata)
-    rvfi_mon.io.rvfi_valid := Bool(true)
-    rvfi_mon.io.rvfi_rd_addr := rf_waddr
-    rvfi_mon.io.rvfi_rd_wdata := rf_wdata
+  when(wb_set_sboard && wb_wen) {
+    rd_store_commit(wb_waddr) := inst_commit
   }
 
+  val store_commit = Wire(new RVFIMonitor.RVFI_Base(p(XLen)))
+
+  when (ll_wen && rf_waddr =/= UInt(0)) {
+    store_commit := rd_store_commit(rf_waddr)
+    store_commit.rd_addr := rf_waddr
+    store_commit.rd_wdata := rf_wdata
+  } .otherwise {
+    store_commit := RVFIMonitor.invalid_RVFI_base(p(XLen))
+  }
+
+  rvfi_mon.connect(Vec(Seq(inst_commit, store_commit)))
 }
