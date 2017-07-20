@@ -878,8 +878,8 @@ class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
   inst_commit.rs2_rdata := Reg(next=Reg(next=ex_rs(1)))
   inst_commit.mem_addr := Reg(next=Reg(next=io.dmem.req.bits.addr))
   inst_commit.mem_rdata := Reg(next=io.dmem.s1_data.data)
-  inst_commit.mem_rmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=isRead(io.dmem.req.bits.cmd)))) & Reg(next=io.dmem.s1_data.mask)
-  inst_commit.mem_wdata := Reg(next=Reg(next=io.dmem.req.bits.data))
+  inst_commit.mem_rmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=isRead(io.dmem.req.bits.cmd))))// & Reg(next=io.dmem.s1_data.mask)
+  inst_commit.mem_wdata := Reg(next=io.dmem.s1_data.data)
   inst_commit.mem_wmask := Fill(p(XLen)/8, Reg(next=Reg(next=io.dmem.req.valid)) && !Reg(next=io.dmem.s1_kill) && !io.dmem.s2_nack && Reg(next=Reg(next=isWrite(io.dmem.req.bits.cmd))))  // TODO Partial store bits (M_PWR)
 
   inst_commit.valid := Bool(false)
