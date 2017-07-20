@@ -8,7 +8,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
 
 /** Collects interrupts from internal and external devices and feeds them into the PLIC */ 
-class InterruptBus(implicit p: Parameters) {
+class InterruptBusWrapper(implicit p: Parameters) {
 
   val int_bus = LazyModule(new IntXbar)    // Interrupt crossbar
 
@@ -26,7 +26,7 @@ class InterruptBus(implicit p: Parameters) {
 
 trait HasInterruptBus {
   implicit val p: Parameters
-  val ibus = new InterruptBus
+  val ibus = new InterruptBusWrapper
 }
 
 /** Specifies the number of external interrupts */
