@@ -720,7 +720,7 @@ class Rocket(implicit p: Parameters) extends CoreModule()(p)
 }
 
 class RegFile(n: Int, w: Int, zero: Boolean = false) {
-  private val rf = Mem(n, UInt(width = w))
+  private val rf = Mem(n, UInt(width = w)).suggestName("regfile")
   private def access(addr: UInt) = rf(~addr(log2Up(n)-1,0))
   private val reads = collection.mutable.ArrayBuffer[(UInt,UInt)]()
   private var canRead = true
@@ -862,6 +862,8 @@ class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
   val has_data = wb_wen && !wb_set_sboard
   val priv = csr.io.status.prv
 
+  val inst_order = RegInit(UInt(0, width=8))
+
   inst_commit.pc_rdata := wb_reg_pc
   inst_commit.pc_wdata := Reg(next=io.imem.req.bits.pc)
   inst_commit.insn := wb_reg_inst
@@ -881,7 +883,9 @@ class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
 
   inst_commit.valid := Bool(false)
   when (wb_valid) {
+    inst_order := inst_order + UInt(1)
     inst_commit.valid := Bool(true)
+    inst_commit.order := inst_order
     when (wfd) {
       inst_commit.rd_addr := rd
       inst_commit.rd_wdata := rd+UInt(32)
@@ -902,6 +906,7 @@ class RocketWithRVFI(implicit p: Parameters) extends Rocket()(p) {
 
   when(wb_set_sboard && wb_wen) {
     rd_store_commit(wb_waddr) := inst_commit
+    inst_commit.valid := Bool(false)
   }
 
   val store_commit = Wire(new RVFIMonitor.RVFI_Base(p(XLen)))
