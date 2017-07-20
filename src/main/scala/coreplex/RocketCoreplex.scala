@@ -58,43 +58,32 @@ trait HasRocketTiles extends HasSystemBus
     if (c.core.useVM) periphIntXbar.intnode := plic.intnode // seip
     lip.foreach { coreIntXbar.intnode := _ }                // lip
 
-    crossing match {
+    val wrapper = crossing match {
       case SynchronousCrossing(params) => {
         val wrapper = LazyModule(new SyncRocketTile(c, i)(pWithExtra))
-        sbus.inwardBufNode :=* wrapper.masterNode 
-        wrapper.slaveNode :*= pbus.outwardBufNode
-        wrapper.asyncIntNode  := asyncIntXbar.intnode
-        wrapper.periphIntNode := periphIntXbar.intnode
-        wrapper.coreIntNode   := coreIntXbar.intnode
+        sbus.fromSyncTiles(params) :=* wrapper.masterNode 
+        wrapper.slaveNode :*= pbus.bufferToSlaves
         wrapper
       }
       case AsynchronousCrossing(depth, sync) => {
         val wrapper = LazyModule(new AsyncRocketTile(c, i)(pWithExtra))
-        val sink = LazyModule(new TLAsyncCrossingSink(depth, sync))
-        val source = LazyModule(new TLAsyncCrossingSource(sync))
-        sink.node :=* wrapper.masterNode
-        sbus.inwardFIFONode :=* sink.node
-        source.node :*= pbus.outwardBufNode
-        wrapper.slaveNode :*= source.node
-        wrapper.asyncIntNode  := asyncIntXbar.intnode
-        wrapper.periphIntNode := periphIntXbar.intnode
-        wrapper.coreIntNode   := coreIntXbar.intnode
+        sbus.fromAsyncTiles(depth, sync) :=* wrapper.masterNode
+        wrapper.slaveNode :*= pbus.toAsyncSlaves(sync)
         wrapper
       }
       case RationalCrossing(direction) => {
         val wrapper = LazyModule(new RationalRocketTile(c, i)(pWithExtra))
         val sink = LazyModule(new TLRationalCrossingSink(direction))
         val source = LazyModule(new TLRationalCrossingSource)
-        sink.node :=* wrapper.masterNode
-        sbus.inwardFIFONode :=* sink.node
-        source.node :*= pbus.outwardBufNode
-        wrapper.slaveNode :*= source.node
-        wrapper.asyncIntNode  := asyncIntXbar.intnode
-        wrapper.periphIntNode := periphIntXbar.intnode
-        wrapper.coreIntNode   := coreIntXbar.intnode
+        sbus.fromRationalTiles(direction) :=* wrapper.masterNode
+        wrapper.slaveNode :*= pbus.toRationalSlaves
         wrapper
       }
     }
+    wrapper.asyncIntNode  := asyncIntXbar.intnode
+    wrapper.periphIntNode := periphIntXbar.intnode
+    wrapper.coreIntNode   := coreIntXbar.intnode
+    wrapper
   }
 }
 
