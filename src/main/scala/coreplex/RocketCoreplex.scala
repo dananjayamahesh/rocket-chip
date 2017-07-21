@@ -121,7 +121,6 @@ trait HasRocketTilesModuleImp extends LazyMultiIOModuleImp
 
 class RocketCoreplex(implicit p: Parameters) extends BaseCoreplex
     with HasRTC
-    with HasPeripheryErrorSlave
     with HasRocketTiles {
   override lazy val module = new RocketCoreplexModule(this)
 }

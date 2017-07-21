@@ -95,4 +95,7 @@ abstract class TLBusWrapper(params: TLBusParams)(implicit p: Parameters) extends
     source.node :*= outwardWWNode
     source.node
   }
+
+  def toFixedWidthPorts: TLOutwardNode = outwardWWNode // TODO, do/don't buffer here; knowing we will after the necessary port conversions
+
 }

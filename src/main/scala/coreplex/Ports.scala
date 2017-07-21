@@ -234,38 +234,6 @@ trait HasSlaveTLPortModuleImp extends LazyMultiIOModuleImp with HasSlaveTLPortBu
   val l2_frontend_bus_tl = IO(outer.l2FrontendTLNode.bundleIn)
 }
 
-/** Inter-System Port (ISP): 
-  * Adds a pair of Asynchronous TL ports to the system, used to peer with other TL-based coreplexes
-  */
-trait HasISPPort extends HasSystemBus {
-  val module: HasISPPortModule
-
-  // TODO: use ChipLink instead of AsyncTileLink
-  val isp_in = TLAsyncInputNode()
-  val isp_out = TLAsyncOutputNode()
-
-  private val out_xbar = LazyModule(new TLXbar)
-  private val out_nums = LazyModule(new TLNodeNumberer)
-  private val out_async = LazyModule(new TLAsyncCrossingSource)
-  out_xbar.node :=* sbus.toSplitSlaves
-  out_nums.node :*= out_xbar.node
-  out_async.node :*= out_nums.node
-  isp_out :*= out_async.node
-
-  sbus.fromAsyncMasters(depth = 8, sync = 3) :=* isp_in
-}
-
-trait HasISPPortBundle {
-  val isp_in: HeterogeneousBag[TLAsyncBundle]
-  val isp_out: HeterogeneousBag[TLAsyncBundle]
-}
-
-trait HasISPPortModule extends LazyMultiIOModuleImp with HasISPPortBundle {
-  val outer: HasISPPort
-  val isp_in = IO(outer.isp_in.bundleIn)
-  val isp_out = IO(outer.isp_out.bundleOut)
-}
-
 /** Memory with AXI port for use in elaboratable test harnesses. */
 class SimAXIMem(channels: Int, forceSize: BigInt = 0)(implicit p: Parameters) extends LazyModule {
   val config = p(ExtMem)

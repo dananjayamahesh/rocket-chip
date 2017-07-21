@@ -21,8 +21,6 @@ class SystemBus(params: SystemBusParams)(implicit p: Parameters) extends TLBusWr
   private val tile_fixer = LazyModule(new TLFIFOFixer(TLFIFOFixer.allUncacheable))
   inwardSplitNode :=* tile_fixer.node
 
-  def toFixedWidthPorts: TLOutwardNode = outwardWWNode // TODO, do/don't buffer here; knowing we will after the necessary port conversions
-
   def toSplitSlaves: TLOutwardNode = outwardSplitNode
 
   val toPeripheryBus: TLOutwardNode = outwardWWNode

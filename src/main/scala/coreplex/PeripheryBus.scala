@@ -19,6 +19,9 @@ case class PeripheryBusParams(
 case object PeripheryBusParams extends Field[PeripheryBusParams]
 
 class PeripheryBus(params: PeripheryBusParams)(implicit p: Parameters) extends TLBusWrapper(params) {
+  def toFixedWidthSlave(widthBytes: Int) = {
+    TLFragmenter(widthBytes, params.blockBytes)(outwardWWNode)
+  }
 
   def toLargeBurstSlave(maxXferBytes: Int) = {
     TLFragmenter(params.beatBytes, maxXferBytes)(outwardBufNode)
